@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Trip Detail</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, doc, getDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // ✅ 1. Firebase 設定（你已註冊的 Web App 設定）
+    const firebaseConfig = {
+      apiKey: "AIzaSyD06060e0HJif6ZTlXToj7RhPyZSKFvT0",
+      authDomain: "carpooling-454201.firebaseapp.com",
+      projectId: "carpooling-454201",
+      storageBucket: "carpooling-454201.appspot.com",
+      messagingSenderId: "631105686931",
+      appId: "1:631105686931:web:263bd38cb172a98db2c66f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ✅ 2. 抓網址 tripId 參數
+    function getTripIdFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('tripId');
+    }
+
+    // ✅ 3. 抓 user displayName
+    async function getUserName(userId) {
+      try {
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          return userSnap.data().displayName || userId;
+        }
+      } catch (e) {
+        console.warn("找不到使用者名稱", userId);
+      }
+      return userId;
+    }
+
+    // ✅ 4. 主函式：讀取 trip 資料並顯示
+    async function loadTripDetail(tripId) {
+      const content = document.getElementById('content');
+
+      if (!tripId) {
+        content.innerText = "找不到 tripId";
+        return;
+      }
+
+      try {
+        const tripRef = doc(db, "trips", tripId);
+        const tripSnap = await getDoc(tripRef);
+
+        if (!tripSnap.exists()) {
+          content.innerText = "查無此行程資料";
+          return;
+        }
+
+        const data = tripSnap.data();
+
+        const selected = Array.isArray(data.selectedPassengers) ? data.selectedPassengers : [];
+        const pending = Array.isArray(data.pendingPassengerInvites) ? data.pendingPassengerInvites : [];
+
+        const selectedNames = await Promise.all(selected.map(getUserName));
+        const pendingNames = await Promise.all(pending.map(p => getUserName(p.userId)));
+
+        content.innerHTML = `
+          <h2>行程資訊</h2>
+          <p><strong>起點：</strong>${data.originDetail || data.origin || '未提供'}</p>
+          <p><strong>終點：</strong>${data.destinationDetail || data.destination || '未提供'}</p>
+          <p><strong>出發時間：</strong>${data.departureTime || '未提供'}</p>
+          <p><strong>乘客上限：</strong>${data.passengerLimit || '未指定'} 人</p>
+          <p><strong>已選乘客 (${selected.length})：</strong><br>${selectedNames.join("<br>") || '無'}</p>
+          <p><strong>邀請中乘客 (${pending.length})：</strong><br>${pendingNames.join("<br>") || '無'}</p>
+        `;
+      } catch (err) {
+        console.error("讀取 trip 資料失敗：", err);
+        content.innerText = "載入失敗，請稍後再試";
+      }
+    }
+
+    // ✅ 5. LIFF 初始化與載入
+    window.onload = async () => {
+      await liff.init({ liffId: "2007468622-N97n1j1Y" }); // 你的 LIFF ID
+      const tripId = getTripIdFromUrl();
+      await loadTripDetail(tripId);
+    };
+  </script>
+
+  <style>
+    body { font-family: sans-serif; padding: 16px; background-color: #f0f0f0; }
+    h2 { margin-top: 0; }
+    p { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div id="content">載入中...</div>
+</body>
+</html>
